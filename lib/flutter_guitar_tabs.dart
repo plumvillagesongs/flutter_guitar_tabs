@@ -10,6 +10,8 @@ class FlutterGuitarTab extends StatelessWidget {
   /// A string containing up to 6 numbers, or `x`, with separating spaces.
   final String tab;
 
+  final String finger;
+
   /// The size of the tab. Has to be between 1 and 10 inclusive. Defaults to 9.
   final int size;
 
@@ -21,14 +23,15 @@ class FlutterGuitarTab extends StatelessWidget {
 
   FlutterGuitarTab(
       {this.name = '',
-      required this.tab,
-      this.size = 9,
-      this.color = Colors.black,
-      this.showStartFretNumber = false,
-      Key? key})
+        required this.tab,
+        required this.finger,
+        this.size = 4,
+        this.color = Colors.black,
+        this.showStartFretNumber = false,
+        Key? key})
       : super(key: key) {
     assert(
-        size <= 10 && size >= 1, 'Size has to be between 1 and 10 inclusive.');
+    size <= 10 && size >= 1, 'Size has to be between 1 and 10 inclusive.');
   }
 
   @override
@@ -84,7 +87,7 @@ class FlutterGuitarTab extends StatelessWidget {
           child: CustomPaint(
             painter: _MyPainter(
               tab,
-              '',
+              finger,
               size: size,
               color: color,
               name: name,
@@ -108,6 +111,8 @@ class TabWidget extends StatefulWidget {
   /// A list of strings containing up to 6 numbers, or `x`, with seperating spaces.
   final List<String> tabs;
 
+  final List<String> fingers;
+
   /// The size of the tab. Has to be between 1 and 10 inclusive. Defaults to 9.
   final int size;
 
@@ -119,21 +124,22 @@ class TabWidget extends StatefulWidget {
 
   TabWidget(
       {required this.name,
-      required this.tabs,
-      this.size = 9,
-      this.color = Colors.black,
-      this.showStartFretNumber = false,
-      Key? key})
+        required this.tabs,
+        required this.fingers,
+        this.size = 4,
+        this.color = Colors.black,
+        this.showStartFretNumber = false,
+        Key? key})
       : super(key: key);
 
   @override
-  _TabWidgetState createState() => _TabWidgetState(name, tabs, size: size);
+  _TabWidgetState createState() => _TabWidgetState(name, tabs, fingers, size: size);
 }
 
 class _Renderer {
   final Function(
       dynamic x, dynamic y, String? text, String? font, dynamic size)? text;
-  final Function(dynamic x, dynamic y, dynamic r, bool fill,
+  final Function(dynamic x, dynamic y, dynamic r, bool fill, String text,  String? font, dynamic size,
       [dynamic lineWidth])? circle;
   final Function(
       dynamic x1, dynamic y1, dynamic x2, dynamic y2, dynamic lineWidth)? rect;
@@ -148,9 +154,10 @@ class _TabWidgetState extends State<TabWidget> {
   final length;
   int index = 0;
   final List<String> tabs;
+  final List<String> fingers;
   final int? size;
 
-  _TabWidgetState(this.name, this.tabs, {this.size}) : length = tabs.length;
+  _TabWidgetState(this.name, this.tabs, this.fingers,  {this.size}) : length = tabs.length;
 
   @override
   Widget build(BuildContext context) {
@@ -163,13 +170,14 @@ class _TabWidgetState extends State<TabWidget> {
           children: tabs
               .map(
                 (e) => FlutterGuitarTab(
-                  tab: e,
-                  name: name,
-                  size: size!,
-                  color: widget.color,
-                  showStartFretNumber: widget.showStartFretNumber,
-                ),
-              )
+              tab: e,
+              finger: fingers[tabs.indexOf(e)],
+              name: name,
+              size: size!,
+              color: widget.color,
+              showStartFretNumber: widget.showStartFretNumber,
+            ),
+          )
               .toList(),
         ),
         Row(
@@ -218,9 +226,9 @@ class _MyPainter extends CustomPainter {
 
   _MyPainter(String positions, String fingers,
       {required this.size,
-      required Color color,
-      required this.name,
-      required this.showFretNumbers})
+        required Color color,
+        required this.name,
+        required this.showFretNumbers})
       : yOffset = [10, 15, 20, 20, 20, 20, 30, 33, 35, 40][size - 1],
         myPaint = Paint()
           ..color = color
@@ -240,13 +248,32 @@ class _MyPainter extends CustomPainter {
         textPainter.layout();
         textPainter.paint(currentCanvas, Offset(x, y));
       },
-      circle: (dynamic x, dynamic y, dynamic r, bool fill,
+      circle: (dynamic x, dynamic y, dynamic r, bool fill, String text,  String? font, dynamic size,
           [dynamic lineWidth]) {
         if (fill) {
+          TextStyle textStyle =  TextStyle(
+            color: Colors.black,
+            fontSize: size,
+            fontWeight: FontWeight.w500,
+          );
+
+          /// Creating a TextPainter object.
+          TextPainter text_painter = TextPainter(
+            // text: span,
+            textAlign: TextAlign.center,
+            textDirection: TextDirection.rtl,
+          );
+          text_painter.text = TextSpan(
+            text: text.toString(),
+            style: textStyle,
+          );
           currentCanvas.drawCircle(
               Offset(x.toDouble(), y.toDouble() - yOffset.toDouble()),
               r,
               myPaint..style = PaintingStyle.fill);
+          text_painter.layout();
+          //center the text inside the circle => manually
+          text_painter.paint(currentCanvas, Offset(x-r+2, (y - yOffset)-r-1));
         } else {
           currentCanvas.drawCircle(
               Offset(x.toDouble(), y.toDouble() - yOffset.toDouble()),
@@ -274,7 +301,7 @@ class _MyPainter extends CustomPainter {
   parse(String frets, String fingers) {
     this.positions = [];
     var raw = [];
-    if (frets.contains(RegExp(r"^[0-9xX]{1,6}$"))) {
+    if (frets.contains(RegExp(r"^[0-9xX]{1,4}$"))) {
       for (var i = 0; i < frets.length; i++) {
         raw.add(frets[i]);
       }
@@ -309,13 +336,16 @@ class _MyPainter extends CustomPainter {
       this.startFret = minFret;
     }
     this.fingerings = [];
+    var rawFinger = [];
+    rawFinger = fingers.split(' ');
     var j = 0;
-    for (var i = 0; i < fingers.length; i++) {
+    for (var i = 0; i < rawFinger.length; i++) {
       for (; j < this.positions.length; j++) {
-        if (this.positions[j]! <= 0) {
+        var pos = this.positions[j] ?? -1;
+        if (pos < 0) {
           this.fingerings.add(null);
         } else {
-          this.fingerings.add(int.parse(fingers[i]));
+          this.fingerings.add(int.parse(rawFinger[j]));
           j++;
           break;
         }
@@ -340,7 +370,7 @@ class _MyPainter extends CustomPainter {
             info, x, y, info['muteStringRadius'], info['muteStringLineWidth']);
       } else if (pos == 0) {
         r!.circle!(
-            x, y, info['openStringRadius'], false, info['openStringLineWidth']);
+            x, y, info['openStringRadius'],  false, "", info['font'], info['fretFontSize'] * 0.8,info['openStringLineWidth']);
       }
     }
   }
@@ -356,7 +386,7 @@ class _MyPainter extends CustomPainter {
           var y = info['boxStartY'] +
               relativePos * info['cellHeight'] -
               (info['cellHeight'] / 2);
-          r!.circle!(x, y, info['dotRadius'], true);
+          r!.circle!(x, y, info['dotRadius'], true, this.fingerings[i].toString(),info['font'], info['fretFontSize']*0.8);
         }
       }
     }
@@ -448,9 +478,9 @@ class _MyPainter extends CustomPainter {
         4;
     info['boxStartX'] = ((info['width'] - info['boxWidth']) / 2).toInt();
     info['boxStartY'] = (info['nameFontSize'] +
-            info['nameFontPaddingBottom'] +
-            info['nutSize'] +
-            info['dotWidth'])
+        info['nameFontPaddingBottom'] +
+        info['nutSize'] +
+        info['dotWidth'])
         .toInt();
     return info;
   }
@@ -461,27 +491,28 @@ class _MyPainter extends CustomPainter {
     this.drawNut(info);
     this.drawName(info);
     this.drawMutedAndOpenStrings(info);
+    //this.drawBars(info);
     this.drawPositions(info);
-    this.drawFingerings(info);
-    this.drawBars(info);
+    //this.drawFingerings(info);
+
   }
 
   drawBars(info) {
     var r = this.renderer;
     if (this.fingerings.length > 0) {
-      var bars = {};
+      var bars = Map();
       for (var i = 0; i < this.positions.length; i++) {
         var fret = this.positions[i] ?? 0;
         if (fret > 0) {
-          if (bars[fret] && bars[fret].finger == this.fingerings[i]) {
-            bars[fret].length = i - bars[fret]['index'];
-          } else {
-            bars[fret] = {
-              "finger": this.fingerings[i],
-              "length": 0,
-              "index": i
-            };
-          }
+          bars[fret] = {
+            "finger": this.fingerings[i],
+            "length": this.startFret,
+            "index": i
+          };
+
+          //if (bars[fret] && bars[fret].finger == this.fingerings[i]) {
+          //  bars[fret].length = i - bars[fret]['index'];
+          //}
         }
       }
       for (var fret in bars.keys) {
@@ -552,16 +583,20 @@ class _MyPainter extends CustomPainter {
   drawFingerings(info) {
     var r = this.renderer;
     var fontSize = info['fingerFontSize'];
-    for (var i in this.fingerings) {
-      var finger = i;
-      var x = info['boxStartX'] + i! * info['cellWidth'];
-      var y = info['boxStartY'] +
-          info['boxHeight'] +
-          fontSize +
-          info['lineWidth'] +
-          1;
+    for (int i = 0; i < this.fingerings.length; i++) {
+      var finger = this.fingerings[i];
+
       if (finger != null) {
-        r!.text!(x, y, finger.toString(), info['font'], fontSize);
+        var pos = this.positions[i] ?? 0;
+
+        var relativePos = pos - this.startFret! + 1;
+        var x = info['boxStartX'] + i * info['cellWidth'];
+        if (relativePos <= 5) {
+          var y = info['boxStartY'] +
+              relativePos * info['cellHeight'] -
+              (info['cellHeight'] / 2);
+          r!.text!(x, y, finger.toString(), info['font'], fontSize);
+        }
       }
     }
   }
